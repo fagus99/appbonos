@@ -22,11 +22,12 @@ max_bono = st.number_input("Importe máximo de bono por usuario", min_value=0.0,
 # Condición opcional de rollover
 usar_rollover = st.checkbox("¿Aplicar condición de rollover?")
 if usar_rollover:
-    factor_rollover = st.number_input("Multiplicador de rollover (ej: 5 significa jugar 5 veces el bono)", min_value=1, value=5)
+    factor_rollover = st.number_input("Rollover requerido (veces que debe apostar el depósito)", min_value=1, value=5)
 
 # Procesamiento
 if jugado_file and deposito_file:
     try:
+        # Lectura
         if jugado_file.name.endswith("csv"):
             jugado_df = pd.read_csv(jugado_file)
         else:
@@ -37,7 +38,7 @@ if jugado_file and deposito_file:
         else:
             depositos_df = pd.read_excel(deposito_file)
 
-        # Normalización de encabezados
+        # Normalizar columnas
         jugado_df.columns = [col.lower().strip() for col in jugado_df.columns]
         depositos_df.columns = [col.lower().strip() for col in depositos_df.columns]
 
@@ -46,18 +47,18 @@ if jugado_file and deposito_file:
 
         df = pd.merge(jugado_df, depositos_df, on="usuario", how="inner")
 
-        # Aplicar condiciones
-        bonificables = df[(df["jugado"] >= min_jugado) & (df["deposito"] >= min_deposito)].copy()
+        # Condiciones
+        condiciones = (df["jugado"] >= min_jugado) & (df["deposito"] >= min_deposito)
+        if usar_rollover:
+            condiciones &= df["jugado"] >= (df["deposito"] * factor_rollover)
+
+        bonificables = df[condiciones].copy()
         bonificables["bono"] = (bonificables["deposito"] * porcentaje_bono / 100).clip(upper=max_bono)
 
-        if usar_rollover:
-            bonificables["rollover"] = bonificables["bono"] * factor_rollover
-
         st.success(f"Usuarios bonificables encontrados: {len(bonificables)}")
-
         st.dataframe(bonificables)
 
-        # Exportar CSV
+        # Exportar
         @st.cache_data
         def convert_df(df):
             return df.to_csv(index=False).encode("utf-8")
@@ -67,4 +68,3 @@ if jugado_file and deposito_file:
 
     except Exception as e:
         st.error(f"Error al procesar los archivos: {e}")
-
