@@ -8,15 +8,21 @@ st.title("🎰 Calculadora de Bonos para Casino Online")
 st.markdown("Subí los archivos con los datos de los usuarios:")
 
 # Carga de archivos
-jugado_file = st.file_uploader("Archivo de importe jugado", type=["csv", "xlsx"])
-deposito_file = st.file_uploader("Archivo de depósitos", type=["csv", "xlsx"])
+jugado_file = st.file_uploader("📄 Archivo de importe jugado", type=["csv", "xlsx"])
+deposito_file = st.file_uploader("📄 Archivo de depósitos", type=["csv", "xlsx"])
 
-# Parámetros de la promoción
-st.markdown("### Parámetros de la promoción")
-porcentaje_bono = st.number_input("Porcentaje de bonificación", min_value=0.0, max_value=100.0, value=20.0)
+st.markdown("### 🧮 Parámetros de la promoción")
+
+# Parámetros base
+porcentaje_bono = st.slider("Porcentaje de bonificación (%)", min_value=0, max_value=100, value=20)
 min_deposito = st.number_input("Depósito mínimo requerido", min_value=0.0, value=1000.0)
 min_jugado = st.number_input("Importe jugado mínimo requerido", min_value=0.0, value=1000.0)
 max_bono = st.number_input("Importe máximo de bono por usuario", min_value=0.0, value=10000.0)
+
+# Condición opcional de rollover
+usar_rollover = st.checkbox("¿Aplicar condición de rollover?")
+if usar_rollover:
+    factor_rollover = st.number_input("Multiplicador de rollover (ej: 5 significa jugar 5 veces el bono)", min_value=1, value=5)
 
 # Procesamiento
 if jugado_file and deposito_file:
@@ -31,7 +37,7 @@ if jugado_file and deposito_file:
         else:
             depositos_df = pd.read_excel(deposito_file)
 
-        # Asegurarse de que las columnas se llaman 'usuario', 'jugado', 'deposito'
+        # Normalización de encabezados
         jugado_df.columns = [col.lower().strip() for col in jugado_df.columns]
         depositos_df.columns = [col.lower().strip() for col in depositos_df.columns]
 
@@ -40,15 +46,18 @@ if jugado_file and deposito_file:
 
         df = pd.merge(jugado_df, depositos_df, on="usuario", how="inner")
 
-        # Aplicar condiciones de bonificación
+        # Aplicar condiciones
         bonificables = df[(df["jugado"] >= min_jugado) & (df["deposito"] >= min_deposito)].copy()
         bonificables["bono"] = (bonificables["deposito"] * porcentaje_bono / 100).clip(upper=max_bono)
+
+        if usar_rollover:
+            bonificables["rollover"] = bonificables["bono"] * factor_rollover
 
         st.success(f"Usuarios bonificables encontrados: {len(bonificables)}")
 
         st.dataframe(bonificables)
 
-        # Descargar resultado
+        # Exportar CSV
         @st.cache_data
         def convert_df(df):
             return df.to_csv(index=False).encode("utf-8")
